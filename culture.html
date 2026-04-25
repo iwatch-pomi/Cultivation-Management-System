@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>培養実験管理</title>
+  <style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', sans-serif; background: #f7fafc; color: #2d3748; font-size: 14px; }
+button { cursor: pointer; font-family: inherit; font-size: 14px; }
+input, select, textarea { font-family: inherit; font-size: 14px; }
+
+/* Header */
+header { background: #2d3748; color: #fff; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; }
+header h1 { font-size: 18px; font-weight: 700; }
+.btn-primary { background: #48bb78; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-weight: 600; }
+.btn-primary:hover { background: #38a169; }
+.btn-secondary { background: #e2e8f0; color: #2d3748; border: none; border-radius: 6px; padding: 8px 16px; }
+.btn-secondary:hover { background: #cbd5e0; }
+.btn-danger { background: #fc8181; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; }
+.btn-danger:hover { background: #f56565; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+
+/* Layout */
+.layout { display: grid; grid-template-columns: 1fr 1fr; gap: 0; min-height: calc(100vh - 50px); }
+.col-left { background: #fff; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; }
+.col-right { background: #f7fafc; overflow-y: auto; }
+
+/* Calendar nav */
+.cal-nav { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e2e8f0; }
+.cal-nav h2 { font-size: 15px; font-weight: 700; }
+.cal-nav button { background: none; border: 1px solid #e2e8f0; border-radius: 4px; padding: 4px 10px; color: #4a5568; }
+.cal-nav button:hover { background: #edf2f7; }
+
+/* Calendar grid */
+.calendar { padding: 8px; }
+.cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 11px; font-weight: 600; color: #718096; padding: 4px 0; }
+.cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-day { min-height: 64px; padding: 4px; border-radius: 4px; cursor: pointer; position: relative; }
+.cal-day:hover { background: #edf2f7; }
+.cal-day.today { background: #ebf8ff; }
+.cal-day.other-month { opacity: 0.35; }
+.cal-day-num { font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 2px; }
+.cal-day.today .cal-day-num { color: #3182ce; }
+.cal-events { display: flex; flex-direction: column; gap: 1px; }
+.cal-ev { font-size: 10px; border-radius: 3px; padding: 1px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
+.cal-ev.ev-planned { background: transparent; color: #38a169; border: 1px dashed #48bb78; }
+.cal-ev.ev-start { background: #48bb78; }
+.cal-ev.ev-subculture { background: #4299e1; }
+.cal-ev.ev-deadline { background: #fc8181; }
+.cal-ev.ev-end { background: #a0aec0; }
+
+/* Experiment list */
+.exp-list-header { padding: 10px 16px; font-size: 12px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.05em; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; background: #f7fafc; }
+.exp-list { flex: 1; overflow-y: auto; }
+.exp-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
+.exp-item:hover { background: #f7fafc; }
+.exp-item.selected { background: #ebf8ff; }
+.exp-color-bar { width: 4px; height: 36px; border-radius: 2px; flex-shrink: 0; }
+.exp-item-info { flex: 1; min-width: 0; }
+.exp-item-name { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.exp-item-org { font-size: 11px; color: #718096; }
+.status-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; color: #fff; }
+
+/* Detail panel */
+.detail-panel { padding: 20px; }
+.detail-empty { color: #a0aec0; text-align: center; padding: 60px 20px; font-size: 16px; }
+.detail-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; gap: 8px; }
+.detail-title { font-size: 20px; font-weight: 700; }
+.detail-section { margin-bottom: 20px; }
+.detail-section-title { font-size: 11px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+.detail-row { display: flex; gap: 8px; margin-bottom: 6px; }
+.detail-label { color: #718096; min-width: 110px; font-size: 13px; }
+.detail-value { font-size: 13px; font-weight: 500; }
+.medium-flow { display: flex; align-items: center; gap: 8px; padding: 10px; background: #f7fafc; border-radius: 6px; }
+.medium-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 4px; padding: 6px 12px; font-size: 13px; }
+.medium-arrow { color: #a0aec0; font-size: 18px; }
+
+/* Timeline */
+.timeline { display: flex; flex-direction: column; gap: 8px; }
+.timeline-item { display: flex; gap: 10px; }
+.timeline-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+.timeline-dot.observation { background: #9f7aea; }
+.timeline-dot.subculture { background: #4299e1; }
+.timeline-dot.result { background: #48bb78; }
+.timeline-dot.general { background: #a0aec0; }
+.timeline-content { flex: 1; }
+.timeline-meta { font-size: 11px; color: #718096; margin-bottom: 2px; }
+.timeline-text { font-size: 13px; }
+.btn-add-note { background: none; border: 1px dashed #cbd5e0; border-radius: 6px; padding: 8px; width: 100%; color: #718096; margin-top: 8px; }
+.btn-add-note:hover { background: #f7fafc; color: #4a5568; }
+
+/* Modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.modal-overlay[hidden] { display: none; }
+.modal-box { background: #fff; border-radius: 10px; padding: 24px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; }
+.modal-title { font-size: 16px; font-weight: 700; margin-bottom: 18px; }
+.form-row { margin-bottom: 14px; }
+.form-row label { display: block; font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 4px; }
+.form-row input, .form-row select, .form-row textarea { width: 100%; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 6px; outline: none; }
+.form-row input:focus, .form-row select:focus, .form-row textarea:focus { border-color: #48bb78; }
+.form-row textarea { resize: vertical; min-height: 70px; }
+.form-row-inline { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .layout { grid-template-columns: 1fr; }
+  .col-left { border-right: none; border-bottom: 1px solid #e2e8f0; }
+}
+  </style>
+</head>
+<body>
+<header>
+  <h1>🧫 培養実験管理</h1>
+  <button class="btn-primary" id="btn-add-exp">＋ 新規実験</button>
+</header>
+
+<main class="layout">
+  <!-- 左カラム -->
+  <div class="col-left">
+    <div class="cal-nav">
+      <button id="btn-prev-month">&#8249;</button>
+      <h2 id="cal-title"></h2>
+      <button id="btn-next-month">&#8250;</button>
+    </div>
+    <div class="calendar">
+      <div class="cal-weekdays">
+        <span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span>
+      </div>
+      <div class="cal-days" id="calendar"></div>
+    </div>
+    <div class="exp-list-header">実験一覧</div>
+    <div class="exp-list" id="exp-list"></div>
+  </div>
+
+  <!-- 右カラム -->
+  <div class="col-right">
+    <div class="detail-panel" id="detail-panel">
+      <div class="detail-empty">実験を選択してください</div>
+    </div>
+  </div>
+</main>
+
+<!-- モーダル1: 実験追加/編集 -->
+<div class="modal-overlay" id="modal-exp" hidden>
+  <div class="modal-box">
+    <div class="modal-title" id="modal-exp-title">実験を追加</div>
+    <input type="hidden" id="exp-id">
+    <div class="form-row">
+      <label>実験名 *</label>
+      <input type="text" id="exp-name" placeholder="例: 大腸菌培養実験 #1">
+    </div>
+    <div class="form-row">
+      <label>微生物名</label>
+      <input type="text" id="exp-organism" placeholder="例: E. coli K-12">
+    </div>
+    <div class="form-row-inline">
+      <div class="form-row">
+        <label>ステータス</label>
+        <select id="exp-status">
+          <option value="planned">計画中</option>
+          <option value="ongoing">実施中</option>
+          <option value="subculturing">継代中</option>
+          <option value="completed">完了</option>
+          <option value="failed">失敗</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>カラー</label>
+        <input type="color" id="exp-color" value="#48bb78" style="height:38px;">
+      </div>
+    </div>
+    <div class="form-row-inline">
+      <div class="form-row">
+        <label>培養開始予定日</label>
+        <input type="date" id="exp-planned-start">
+      </div>
+      <div class="form-row">
+        <label>培養開始日（実際）</label>
+        <input type="date" id="exp-actual-start">
+      </div>
+    </div>
+    <div class="form-row-inline">
+      <div class="form-row">
+        <label>結果発表期日</label>
+        <input type="date" id="exp-deadline">
+      </div>
+      <div class="form-row">
+        <label>培養終了日</label>
+        <input type="date" id="exp-actual-end">
+      </div>
+    </div>
+    <div class="form-row-inline">
+      <div class="form-row">
+        <label>培地1</label>
+        <input type="text" id="exp-medium1" placeholder="例: LB培地">
+      </div>
+      <div class="form-row">
+        <label>培地2</label>
+        <input type="text" id="exp-medium2" placeholder="例: M9培地">
+      </div>
+    </div>
+    <div class="form-row-inline">
+      <div class="form-row">
+        <label>継代培養日</label>
+        <input type="date" id="exp-subculture-date">
+      </div>
+      <div class="form-row">
+        <label>継代メモ</label>
+        <input type="text" id="exp-subculture-notes" placeholder="継代に関するメモ">
+      </div>
+    </div>
+    <div class="form-row">
+      <label>最終結果</label>
+      <textarea id="exp-result" placeholder="実験の最終結果を記入"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-danger" id="btn-delete-exp" style="margin-right:auto;" hidden>削除</button>
+      <button class="btn-secondary" id="btn-cancel-exp">キャンセル</button>
+      <button class="btn-primary" id="btn-save-exp">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル2: 進捗メモ追加 -->
+<div class="modal-overlay" id="modal-note" hidden>
+  <div class="modal-box">
+    <div class="modal-title">進捗メモを追加</div>
+    <input type="hidden" id="note-exp-id">
+    <div class="form-row">
+      <label>日付</label>
+      <input type="date" id="note-date">
+    </div>
+    <div class="form-row">
+      <label>種別</label>
+      <select id="note-type">
+        <option value="observation">観察</option>
+        <option value="subculture">継代</option>
+        <option value="result">結果</option>
+        <option value="general">一般</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>内容 *</label>
+      <textarea id="note-content" placeholder="メモを入力してください"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="btn-cancel-note">キャンセル</button>
+      <button class="btn-primary" id="btn-save-note">追加</button>
+    </div>
+  </div>
+</div>
+<script>
+const STATUS_LABEL = { planned:'計画中', ongoing:'実施中', subculturing:'継代中', completed:'完了', failed:'失敗' };
+const STATUS_COLOR = { planned:'#68d391', ongoing:'#48bb78', subculturing:'#4299e1', completed:'#a0aec0', failed:'#fc8181' };
+const NOTE_LABEL = { observation:'観察', subculture:'継代', result:'結果', general:'一般' };
+
+const _now = new Date();
+const state = {
+  experiments: [],
+  currentYear: _now.getFullYear(),
+  currentMonth: _now.getMonth(),
+  selectedId: null,
+  syncTimer: null
+};
+
+function uuidv4() {
+  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+}
+
+function todayYMD() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+const LS_KEY = 'cultivation-data-v1';
+
+function saveLocal() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ experiments: state.experiments })); } catch {}
+}
+
+function loadLocal() {
+  try {
+    const d = JSON.parse(localStorage.getItem(LS_KEY));
+    if (Array.isArray(d?.experiments)) state.experiments = d.experiments;
+  } catch {}
+}
+
+async function loadFromAPI() {
+  try {
+    const r = await fetch('/api/culture-load');
+    if (!r.ok) throw new Error('load failed');
+    const resp = await r.json();
+    if (Array.isArray(resp?.experiments)) {
+      state.experiments = resp.experiments;
+      saveLocal();
+      return;
+    }
+  } catch {}
+  loadLocal();
+}
+
+async function saveToAPI() {
+  saveLocal();
+  try {
+    await fetch('/api/culture-save', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ experiments: state.experiments })
+    });
+  } catch {}
+}
+
+function scheduleSave() {
+  clearTimeout(state.syncTimer);
+  state.syncTimer = setTimeout(saveToAPI, 1500);
+}
+function buildCalendarEvents() {
+  const map = {};
+  function addEv(ymd, cls, name) {
+    if (!ymd) return;
+    if (!map[ymd]) map[ymd] = [];
+    map[ymd].push({ cls, name });
+  }
+  state.experiments.forEach(exp => {
+    addEv(exp.plannedStartDate, 'ev-planned', exp.name);
+    addEv(exp.actualStartDate,  'ev-start',    exp.name);
+    addEv(exp.subcultureDate,   'ev-subculture',exp.name);
+    addEv(exp.resultDeadline,   'ev-deadline',  exp.name);
+    addEv(exp.actualEndDate,    'ev-end',       exp.name);
+  });
+  return map;
+}
+
+function renderCalendar() {
+  const y = state.currentYear;
+  const m = state.currentMonth;
+  document.getElementById('cal-title').textContent = `${y}年${m+1}月`;
+
+  const evMap = buildCalendarEvents();
+  const firstDay = new Date(y, m, 1).getDay();
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const daysInPrev = new Date(y, m, 0).getDate();
+  const todayStr = todayYMD();
+
+  const grid = document.getElementById('calendar');
+  grid.innerHTML = '';
+
+  let cells = [];
+  for (let i = firstDay - 1; i >= 0; i--) {
+    cells.push({ day: daysInPrev - i, cur: false, ymd: null });
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ymd = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    cells.push({ day: d, cur: true, ymd });
+  }
+  const remaining = 42 - cells.length;
+  for (let d = 1; d <= remaining; d++) {
+    cells.push({ day: d, cur: false, ymd: null });
+  }
+
+  cells.forEach(({ day, cur, ymd }) => {
+    const cell = document.createElement('div');
+    cell.className = 'cal-day' + (cur ? '' : ' other-month') + (ymd === todayStr ? ' today' : '');
+
+    const num = document.createElement('div');
+    num.className = 'cal-day-num';
+    num.textContent = day;
+    cell.appendChild(num);
+
+    if (ymd && evMap[ymd]) {
+      const evWrap = document.createElement('div');
+      evWrap.className = 'cal-events';
+      evMap[ymd].slice(0, 3).forEach(ev => {
+        const dot = document.createElement('div');
+        dot.className = `cal-ev ${ev.cls}`;
+        dot.textContent = ev.name;
+        dot.title = ev.name;
+        evWrap.appendChild(dot);
+      });
+      cell.appendChild(evWrap);
+    }
+
+    if (cur && ymd) {
+      cell.addEventListener('click', () => {
+        const related = state.experiments.find(e =>
+          e.plannedStartDate === ymd || e.actualStartDate === ymd ||
+          e.subcultureDate === ymd || e.resultDeadline === ymd || e.actualEndDate === ymd
+        );
+        if (related) selectExperiment(related.id);
+      });
+    }
+    grid.appendChild(cell);
+  });
+}
+function formatDate(ymd) {
+  if (!ymd) return '—';
+  const [y, m, d] = ymd.split('-');
+  return `${y}年${Number(m)}月${Number(d)}日`;
+}
+
+function renderExpList() {
+  const list = document.getElementById('exp-list');
+  list.innerHTML = '';
+  if (state.experiments.length === 0) {
+    list.innerHTML = '<div style="padding:20px;color:#a0aec0;text-align:center;">実験がありません</div>';
+    return;
+  }
+  state.experiments.forEach(exp => {
+    const item = document.createElement('div');
+    item.className = 'exp-item' + (exp.id === state.selectedId ? ' selected' : '');
+    item.innerHTML = `
+      <div class="exp-color-bar" style="background:${exp.color || '#48bb78'}"></div>
+      <div class="exp-item-info">
+        <div class="exp-item-name">${escHtml(exp.name)}</div>
+        <div class="exp-item-org">${escHtml(exp.organism || '')}</div>
+      </div>
+      <span class="status-badge" style="background:${STATUS_COLOR[exp.status] || '#a0aec0'}">${STATUS_LABEL[exp.status] || exp.status}</span>
+    `;
+    item.addEventListener('click', () => selectExperiment(exp.id));
+    list.appendChild(item);
+  });
+}
+
+function selectExperiment(id) {
+  state.selectedId = id;
+  renderExpList();
+  renderDetail();
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderDetail() {
+  const panel = document.getElementById('detail-panel');
+  const exp = state.experiments.find(e => e.id === state.selectedId);
+  if (!exp) {
+    panel.innerHTML = '<div class="detail-empty">実験を選択してください</div>';
+    return;
+  }
+
+  const notes = [...(exp.progressNotes || [])].sort((a,b) => b.date.localeCompare(a.date));
+  const notesHtml = notes.length === 0
+    ? '<div style="color:#a0aec0;font-size:13px;">記録がありません</div>'
+    : notes.map(n => `
+      <div class="timeline-item">
+        <div class="timeline-dot ${n.type}"></div>
+        <div class="timeline-content">
+          <div class="timeline-meta">${formatDate(n.date)} · ${NOTE_LABEL[n.type] || n.type}</div>
+          <div class="timeline-text">${escHtml(n.content)}</div>
+        </div>
+      </div>`).join('');
+
+  const medium2Part = exp.medium2
+    ? `<span class="medium-arrow">→</span><div class="medium-box">${escHtml(exp.medium2)}</div>`
+    : '';
+
+  panel.innerHTML = `
+    <div class="detail-header">
+      <div>
+        <div class="detail-title">${escHtml(exp.name)}</div>
+        <span class="status-badge" style="background:${STATUS_COLOR[exp.status] || '#a0aec0'};margin-top:6px;display:inline-block">
+          ${STATUS_LABEL[exp.status] || exp.status}
+        </span>
+      </div>
+      <button class="btn-secondary btn-sm" id="btn-edit-exp">編集</button>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">基本情報</div>
+      <div class="detail-row"><span class="detail-label">微生物名</span><span class="detail-value">${escHtml(exp.organism || '—')}</span></div>
+      <div class="detail-row"><span class="detail-label">培養開始予定日</span><span class="detail-value">${formatDate(exp.plannedStartDate)}</span></div>
+      <div class="detail-row"><span class="detail-label">培養開始日</span><span class="detail-value">${formatDate(exp.actualStartDate)}</span></div>
+      <div class="detail-row"><span class="detail-label">結果発表期日</span><span class="detail-value">${formatDate(exp.resultDeadline)}</span></div>
+      <div class="detail-row"><span class="detail-label">培養終了日</span><span class="detail-value">${formatDate(exp.actualEndDate)}</span></div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">培地</div>
+      <div class="medium-flow">
+        <div class="medium-box">${escHtml(exp.medium1 || '—')}</div>
+        ${medium2Part}
+      </div>
+    </div>
+
+    ${exp.subcultureDate ? `
+    <div class="detail-section">
+      <div class="detail-section-title">継代培養</div>
+      <div class="detail-row"><span class="detail-label">継代培養日</span><span class="detail-value">${formatDate(exp.subcultureDate)}</span></div>
+      ${exp.subcultureNotes ? `<div class="detail-row"><span class="detail-label">継代メモ</span><span class="detail-value">${escHtml(exp.subcultureNotes)}</span></div>` : ''}
+    </div>` : ''}
+
+    <div class="detail-section">
+      <div class="detail-section-title">進捗タイムライン</div>
+      <div class="timeline">${notesHtml}</div>
+      <button class="btn-add-note" id="btn-add-note">＋ メモを追加</button>
+    </div>
+
+    ${exp.result ? `
+    <div class="detail-section">
+      <div class="detail-section-title">最終結果</div>
+      <div style="font-size:13px;line-height:1.6;">${escHtml(exp.result)}</div>
+    </div>` : ''}
+  `;
+
+  document.getElementById('btn-edit-exp').addEventListener('click', () => openEditExpModal(exp.id));
+  document.getElementById('btn-add-note').addEventListener('click', () => openNoteModal(exp.id));
+}
+function openAddExpModal() {
+  document.getElementById('modal-exp-title').textContent = '実験を追加';
+  document.getElementById('exp-id').value = '';
+  document.getElementById('exp-name').value = '';
+  document.getElementById('exp-organism').value = '';
+  document.getElementById('exp-status').value = 'planned';
+  document.getElementById('exp-color').value = '#48bb78';
+  document.getElementById('exp-planned-start').value = '';
+  document.getElementById('exp-actual-start').value = '';
+  document.getElementById('exp-deadline').value = '';
+  document.getElementById('exp-actual-end').value = '';
+  document.getElementById('exp-medium1').value = '';
+  document.getElementById('exp-medium2').value = '';
+  document.getElementById('exp-subculture-date').value = '';
+  document.getElementById('exp-subculture-notes').value = '';
+  document.getElementById('exp-result').value = '';
+  document.getElementById('btn-delete-exp').setAttribute('hidden', '');
+  document.getElementById('modal-exp').removeAttribute('hidden');
+  document.getElementById('exp-name').focus();
+}
+
+function openEditExpModal(id) {
+  const exp = state.experiments.find(e => e.id === id);
+  if (!exp) return;
+  document.getElementById('modal-exp-title').textContent = '実験を編集';
+  document.getElementById('exp-id').value = exp.id;
+  document.getElementById('exp-name').value = exp.name || '';
+  document.getElementById('exp-organism').value = exp.organism || '';
+  document.getElementById('exp-status').value = exp.status || 'planned';
+  document.getElementById('exp-color').value = exp.color || '#48bb78';
+  document.getElementById('exp-planned-start').value = exp.plannedStartDate || '';
+  document.getElementById('exp-actual-start').value = exp.actualStartDate || '';
+  document.getElementById('exp-deadline').value = exp.resultDeadline || '';
+  document.getElementById('exp-actual-end').value = exp.actualEndDate || '';
+  document.getElementById('exp-medium1').value = exp.medium1 || '';
+  document.getElementById('exp-medium2').value = exp.medium2 || '';
+  document.getElementById('exp-subculture-date').value = exp.subcultureDate || '';
+  document.getElementById('exp-subculture-notes').value = exp.subcultureNotes || '';
+  document.getElementById('exp-result').value = exp.result || '';
+  document.getElementById('btn-delete-exp').removeAttribute('hidden');
+  document.getElementById('modal-exp').removeAttribute('hidden');
+}
+
+function closeExpModal() {
+  document.getElementById('modal-exp').setAttribute('hidden', '');
+}
+
+function saveExp() {
+  const name = document.getElementById('exp-name').value.trim();
+  if (!name) { alert('実験名を入力してください'); return; }
+  const id = document.getElementById('exp-id').value;
+  const data = {
+    name,
+    organism:        document.getElementById('exp-organism').value.trim(),
+    status:          document.getElementById('exp-status').value,
+    color:           document.getElementById('exp-color').value,
+    plannedStartDate:document.getElementById('exp-planned-start').value || null,
+    actualStartDate: document.getElementById('exp-actual-start').value || null,
+    resultDeadline:  document.getElementById('exp-deadline').value || null,
+    actualEndDate:   document.getElementById('exp-actual-end').value || null,
+    medium1:         document.getElementById('exp-medium1').value.trim(),
+    medium2:         document.getElementById('exp-medium2').value.trim(),
+    subcultureDate:  document.getElementById('exp-subculture-date').value || null,
+    subcultureNotes: document.getElementById('exp-subculture-notes').value.trim(),
+    result:          document.getElementById('exp-result').value.trim(),
+  };
+  if (id) {
+    const idx = state.experiments.findIndex(e => e.id === id);
+    if (idx !== -1) state.experiments[idx] = { ...state.experiments[idx], ...data };
+  } else {
+    state.experiments.push({ id: uuidv4(), progressNotes: [], createdAt: new Date().toISOString(), ...data });
+  }
+  closeExpModal();
+  renderAll();
+  scheduleSave();
+}
+
+function deleteExp() {
+  const id = document.getElementById('exp-id').value;
+  if (!id || !confirm('この実験を削除しますか？')) return;
+  state.experiments = state.experiments.filter(e => e.id !== id);
+  if (state.selectedId === id) state.selectedId = null;
+  closeExpModal();
+  renderAll();
+  scheduleSave();
+}
+
+let _noteTargetId = null;
+
+function openNoteModal(expId) {
+  _noteTargetId = expId;
+  document.getElementById('note-date').value = todayYMD();
+  document.getElementById('note-type').value = 'observation';
+  document.getElementById('note-content').value = '';
+  document.getElementById('modal-note').removeAttribute('hidden');
+  document.getElementById('note-content').focus();
+}
+
+function closeNoteModal() {
+  document.getElementById('modal-note').setAttribute('hidden', '');
+  _noteTargetId = null;
+}
+
+function saveNote() {
+  const content = document.getElementById('note-content').value.trim();
+  if (!content) { alert('内容を入力してください'); return; }
+  const exp = state.experiments.find(e => e.id === _noteTargetId);
+  if (!exp) return;
+  if (!Array.isArray(exp.progressNotes)) exp.progressNotes = [];
+  exp.progressNotes.push({
+    id:      uuidv4(),
+    date:    document.getElementById('note-date').value || todayYMD(),
+    type:    document.getElementById('note-type').value,
+    content
+  });
+  closeNoteModal();
+  renderDetail();
+  scheduleSave();
+}
+function renderAll() {
+  renderCalendar();
+  renderExpList();
+  renderDetail();
+}
+
+// Header
+document.getElementById('btn-add-exp').addEventListener('click', openAddExpModal);
+
+// Calendar nav
+document.getElementById('btn-prev-month').addEventListener('click', () => {
+  state.currentMonth--;
+  if (state.currentMonth < 0) { state.currentMonth = 11; state.currentYear--; }
+  renderCalendar();
+});
+document.getElementById('btn-next-month').addEventListener('click', () => {
+  state.currentMonth++;
+  if (state.currentMonth > 11) { state.currentMonth = 0; state.currentYear++; }
+  renderCalendar();
+});
+
+// Modal exp buttons
+document.getElementById('btn-save-exp').addEventListener('click', saveExp);
+document.getElementById('btn-cancel-exp').addEventListener('click', closeExpModal);
+document.getElementById('btn-delete-exp').addEventListener('click', deleteExp);
+
+// Modal note buttons
+document.getElementById('btn-save-note').addEventListener('click', saveNote);
+document.getElementById('btn-cancel-note').addEventListener('click', closeNoteModal);
+
+// Overlay click to close
+document.getElementById('modal-exp').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-exp')) closeExpModal();
+});
+document.getElementById('modal-note').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-note')) closeNoteModal();
+});
+
+// Escape key
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeExpModal(); closeNoteModal(); }
+});
+
+// Init
+async function init() {
+  await loadFromAPI();
+  renderAll();
+}
+init();
+</script>
+</body>
+</html>
