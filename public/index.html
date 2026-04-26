@@ -65,9 +65,10 @@ header h1 { font-size: 18px; font-weight: 700; }
 
 /* Exp item archive button */
 .exp-item { position: relative; }
-.exp-item-archive { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); opacity: 0; background: none; border: none; color: #a0aec0; font-size: 14px; padding: 4px; line-height: 1; cursor: pointer; }
-.exp-item:hover .exp-item-archive { opacity: 1; }
-.exp-item-archive:hover { color: #718096; }
+.exp-item-actions { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; opacity: 0; }
+.exp-item:hover .exp-item-actions { opacity: 1; }
+.exp-item-archive, .exp-item-move { background: none; border: none; color: #a0aec0; font-size: 13px; padding: 4px; line-height: 1; cursor: pointer; border-radius: 4px; }
+.exp-item-archive:hover, .exp-item-move:hover { color: #4a5568; background: #edf2f7; }
 .exp-item.archived-item { opacity: 0.65; }
 .folder-label { font-size: 10px; font-weight: 700; color: #a0aec0; padding: 8px 16px 2px; text-transform: uppercase; letter-spacing: 0.05em; }
 .exp-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
@@ -624,9 +625,13 @@ function renderExpList() {
         <div class="exp-item-name">${escHtml(exp.name)}</div>
         <div class="exp-item-org">${escHtml(exp.organism || '')}</div>
       </div>
-      <span class="status-badge" style="background:${STATUS_COLOR[exp.status] || '#a0aec0'};margin-right:24px">${STATUS_LABEL[exp.status] || exp.status}</span>
-      <button class="exp-item-archive" title="${exp.archived ? 'アーカイブ解除' : 'アーカイブ'}">${exp.archived ? '↩' : '📦'}</button>
+      <span class="status-badge" style="background:${STATUS_COLOR[exp.status] || '#a0aec0'};margin-right:56px">${STATUS_LABEL[exp.status] || exp.status}</span>
+      <div class="exp-item-actions">
+        <button class="exp-item-move" title="フォルダへ移動">📂</button>
+        <button class="exp-item-archive" title="${exp.archived ? 'アーカイブ解除' : 'アーカイブ'}">${exp.archived ? '↩' : '📦'}</button>
+      </div>
     `;
+    item.querySelector('.exp-item-move').addEventListener('click', e => { e.stopPropagation(); moveExpFolder(exp.id); });
     item.querySelector('.exp-item-archive').addEventListener('click', e => { e.stopPropagation(); archiveExp(exp.id); });
     item.addEventListener('click', () => selectExperiment(exp.id));
     return item;
@@ -665,6 +670,31 @@ function archiveExp(id) {
   if (exp.archived && state.selectedId === id) state.selectedId = null;
   renderExpList();
   renderDetail();
+  scheduleSave();
+}
+
+function moveExpFolder(id) {
+  const exp = state.experiments.find(e => e.id === id);
+  if (!exp) return;
+  const folders = getFolders();
+  const current = exp.folder || '（なし）';
+  const options = ['（フォルダなし）', ...folders, '＋ 新しいフォルダを作成…'];
+  const msg = `「${exp.name}」の移動先フォルダを選んでください\n現在: ${current}\n\n`
+    + options.map((f, i) => `${i + 1}. ${f}`).join('\n');
+  const ans = prompt(msg);
+  if (ans === null) return;
+  const idx = parseInt(ans, 10) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= options.length) { alert('番号を入力してください'); return; }
+  if (idx === 0) {
+    exp.folder = null;
+  } else if (idx === options.length - 1) {
+    const newName = prompt('新しいフォルダ名を入力してください');
+    if (!newName?.trim()) return;
+    exp.folder = newName.trim();
+  } else {
+    exp.folder = folders[idx - 1];
+  }
+  renderExpList();
   scheduleSave();
 }
 
@@ -1151,7 +1181,6 @@ document.getElementById('btn-add-folder').addEventListener('click', () => {
   if (!name?.trim()) return;
   state.activeFolder = name.trim();
   renderExpList();
-  openAddExpModal();
 });
 
 // Calendar nav
