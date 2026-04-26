@@ -393,6 +393,7 @@ const NOTE_LABEL = { observation:'観察', subculture:'継代', result:'結果',
 const _now = new Date();
 const state = {
   experiments: [],
+  folders: [],
   currentYear: _now.getFullYear(),
   currentMonth: _now.getMonth(),
   selectedId: null,
@@ -415,13 +416,14 @@ const CFG_KEY = 'cultivation-jsonbin-cfg';
 const JSONBIN_BASE = 'https://api.jsonbin.io/v3/b';
 
 function saveLocal() {
-  try { localStorage.setItem(LS_KEY, JSON.stringify({ experiments: state.experiments })); } catch {}
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ experiments: state.experiments, folders: state.folders })); } catch {}
 }
 
 function loadLocal() {
   try {
     const d = JSON.parse(localStorage.getItem(LS_KEY));
     if (Array.isArray(d?.experiments)) state.experiments = d.experiments;
+    if (Array.isArray(d?.folders)) state.folders = d.folders;
   } catch {}
 }
 
@@ -455,6 +457,7 @@ async function loadFromAPI() {
     const json = await r.json();
     if (Array.isArray(json?.record?.experiments)) {
       state.experiments = json.record.experiments;
+      if (Array.isArray(json.record.folders)) state.folders = json.record.folders;
       saveLocal();
       setSyncStatus('同期済', 'sync-ok');
       return;
@@ -473,7 +476,7 @@ async function saveToAPI() {
     const r = await fetch(`${JSONBIN_BASE}/${cfg.binId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'X-Master-Key': cfg.apiKey },
-      body: JSON.stringify({ experiments: state.experiments })
+      body: JSON.stringify({ experiments: state.experiments, folders: state.folders })
     });
     if (!r.ok) throw new Error(`JSONBin ${r.status}`);
     setSyncStatus('同期済', 'sync-ok');
@@ -572,7 +575,7 @@ function formatDate(ymd) {
 }
 
 function getFolders() {
-  const set = new Set();
+  const set = new Set(state.folders);
   state.experiments.forEach(e => { if (!e.archived && e.folder) set.add(e.folder); });
   return [...set].sort();
 }
@@ -587,11 +590,6 @@ function renderFolderBar() {
   const bar = document.getElementById('folder-bar');
   if (!bar) return;
   const folders = getFolders();
-  // アクティブフォルダが実験ゼロの新フォルダでもタブに表示する
-  if (state.activeFolder && state.activeFolder !== '__archived__' && !folders.includes(state.activeFolder)) {
-    folders.push(state.activeFolder);
-    folders.sort();
-  }
   const hasArchived = state.experiments.some(e => e.archived);
   const tabs = [{ key: null, label: 'すべて' }, ...folders.map(f => ({ key: f, label: `📁 ${f}` }))];
   if (hasArchived) tabs.push({ key: '__archived__', label: '📦 アーカイブ', cls: 'archive-tab' });
@@ -697,6 +695,7 @@ function moveExpFolder(id) {
     const newName = prompt('新しいフォルダ名を入力してください');
     if (!newName?.trim()) return;
     exp.folder = newName.trim();
+    if (!state.folders.includes(exp.folder)) state.folders.push(exp.folder);
     state.activeFolder = exp.folder;
   } else {
     exp.folder = folders[idx - 1];
@@ -1187,8 +1186,11 @@ document.getElementById('btn-add-exp').addEventListener('click', openAddExpModal
 document.getElementById('btn-add-folder').addEventListener('click', () => {
   const name = prompt('フォルダ名を入力してください');
   if (!name?.trim()) return;
-  state.activeFolder = name.trim();
+  const folderName = name.trim();
+  if (!state.folders.includes(folderName)) state.folders.push(folderName);
+  state.activeFolder = folderName;
   renderExpList();
+  scheduleSave();
 });
 
 // Calendar nav
