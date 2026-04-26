@@ -51,8 +51,25 @@ header h1 { font-size: 18px; font-weight: 700; }
 .cal-ev.ev-end { background: #a0aec0; }
 
 /* Experiment list */
-.exp-list-header { padding: 10px 16px; font-size: 12px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.05em; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; background: #f7fafc; }
+.exp-list-header { padding: 8px 16px; font-size: 12px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.05em; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; background: #f7fafc; display: flex; align-items: center; justify-content: space-between; }
 .exp-list { flex: 1; overflow-y: auto; }
+
+/* Folder bar */
+.folder-bar { display: flex; gap: 4px; padding: 6px 10px; background: #f7fafc; border-bottom: 1px solid #e2e8f0; overflow-x: auto; flex-shrink: 0; }
+.folder-bar::-webkit-scrollbar { height: 3px; }
+.folder-bar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 2px; }
+.folder-tab { white-space: nowrap; padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; border: 1px solid #e2e8f0; background: #fff; color: #718096; cursor: pointer; }
+.folder-tab:hover { background: #edf2f7; }
+.folder-tab.active { background: #2d3748; color: #fff; border-color: #2d3748; }
+.folder-tab.archive-tab.active { background: #a0aec0; border-color: #a0aec0; }
+
+/* Exp item archive button */
+.exp-item { position: relative; }
+.exp-item-archive { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); opacity: 0; background: none; border: none; color: #a0aec0; font-size: 14px; padding: 4px; line-height: 1; cursor: pointer; }
+.exp-item:hover .exp-item-archive { opacity: 1; }
+.exp-item-archive:hover { color: #718096; }
+.exp-item.archived-item { opacity: 0.65; }
+.folder-label { font-size: 10px; font-weight: 700; color: #a0aec0; padding: 8px 16px 2px; text-transform: uppercase; letter-spacing: 0.05em; }
 .exp-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
 .exp-item:hover { background: #f7fafc; }
 .exp-item.selected { background: #ebf8ff; }
@@ -163,7 +180,11 @@ header h1 { font-size: 18px; font-weight: 700; }
       </div>
       <div class="cal-days" id="calendar"></div>
     </div>
-    <div class="exp-list-header">実験一覧</div>
+    <div class="exp-list-header">
+      実験一覧
+      <button class="btn-secondary btn-sm" id="btn-add-folder" style="font-size:11px;padding:2px 8px;">＋ フォルダ</button>
+    </div>
+    <div class="folder-bar" id="folder-bar"></div>
     <div class="exp-list" id="exp-list"></div>
   </div>
 
@@ -192,6 +213,11 @@ header h1 { font-size: 18px; font-weight: 700; }
     <div class="form-row">
       <label>微生物名</label>
       <input type="text" id="exp-organism" placeholder="例: E. coli K-12">
+    </div>
+    <div class="form-row">
+      <label>フォルダ</label>
+      <input type="text" id="exp-folder" list="folder-datalist" placeholder="フォルダ名（空欄でフォルダなし）" autocomplete="off">
+      <datalist id="folder-datalist"></datalist>
     </div>
     <div class="form-row-inline">
       <div class="form-row">
@@ -368,7 +394,8 @@ const state = {
   currentYear: _now.getFullYear(),
   currentMonth: _now.getMonth(),
   selectedId: null,
-  syncTimer: null
+  syncTimer: null,
+  activeFolder: null
 };
 
 function uuidv4() {
@@ -542,27 +569,102 @@ function formatDate(ymd) {
   return `${y}年${Number(m)}月${Number(d)}日`;
 }
 
+function getFolders() {
+  const set = new Set();
+  state.experiments.forEach(e => { if (!e.archived && e.folder) set.add(e.folder); });
+  return [...set].sort();
+}
+
+function updateFolderDatalist() {
+  const dl = document.getElementById('folder-datalist');
+  if (!dl) return;
+  dl.innerHTML = getFolders().map(f => `<option value="${escHtml(f)}">`).join('');
+}
+
+function renderFolderBar() {
+  const bar = document.getElementById('folder-bar');
+  if (!bar) return;
+  const folders = getFolders();
+  const hasArchived = state.experiments.some(e => e.archived);
+  const tabs = [{ key: null, label: 'すべて' }, ...folders.map(f => ({ key: f, label: `📁 ${f}` }))];
+  if (hasArchived) tabs.push({ key: '__archived__', label: '📦 アーカイブ', cls: 'archive-tab' });
+  bar.innerHTML = tabs.map(t =>
+    `<button class="folder-tab${t.cls ? ' '+t.cls : ''}${state.activeFolder === t.key ? ' active' : ''}" data-folder="${t.key ?? ''}">${escHtml(t.label)}</button>`
+  ).join('');
+  bar.querySelectorAll('.folder-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.activeFolder = btn.dataset.folder === '' ? null : btn.dataset.folder;
+      renderExpList();
+    });
+  });
+}
+
 function renderExpList() {
+  renderFolderBar();
+  updateFolderDatalist();
   const list = document.getElementById('exp-list');
   list.innerHTML = '';
-  if (state.experiments.length === 0) {
-    list.innerHTML = '<div style="padding:20px;color:#a0aec0;text-align:center;">実験がありません</div>';
+
+  const isArchiveView = state.activeFolder === '__archived__';
+  let exps = state.experiments.filter(e => isArchiveView ? e.archived : !e.archived);
+  if (!isArchiveView && state.activeFolder) exps = exps.filter(e => e.folder === state.activeFolder);
+
+  if (exps.length === 0) {
+    list.innerHTML = `<div style="padding:20px;color:#a0aec0;text-align:center;">${isArchiveView ? 'アーカイブはありません' : '実験がありません'}</div>`;
     return;
   }
-  state.experiments.forEach(exp => {
+
+  const makeItem = exp => {
     const item = document.createElement('div');
-    item.className = 'exp-item' + (exp.id === state.selectedId ? ' selected' : '');
+    item.className = 'exp-item' + (exp.id === state.selectedId ? ' selected' : '') + (exp.archived ? ' archived-item' : '');
     item.innerHTML = `
       <div class="exp-color-bar" style="background:${exp.color || '#48bb78'}"></div>
       <div class="exp-item-info">
         <div class="exp-item-name">${escHtml(exp.name)}</div>
         <div class="exp-item-org">${escHtml(exp.organism || '')}</div>
       </div>
-      <span class="status-badge" style="background:${STATUS_COLOR[exp.status] || '#a0aec0'}">${STATUS_LABEL[exp.status] || exp.status}</span>
+      <span class="status-badge" style="background:${STATUS_COLOR[exp.status] || '#a0aec0'};margin-right:24px">${STATUS_LABEL[exp.status] || exp.status}</span>
+      <button class="exp-item-archive" title="${exp.archived ? 'アーカイブ解除' : 'アーカイブ'}">${exp.archived ? '↩' : '📦'}</button>
     `;
+    item.querySelector('.exp-item-archive').addEventListener('click', e => { e.stopPropagation(); archiveExp(exp.id); });
     item.addEventListener('click', () => selectExperiment(exp.id));
-    list.appendChild(item);
-  });
+    return item;
+  };
+
+  if (isArchiveView || state.activeFolder) {
+    exps.forEach(exp => list.appendChild(makeItem(exp)));
+  } else {
+    const noFolder = exps.filter(e => !e.folder);
+    const byFolder = {};
+    exps.filter(e => e.folder).forEach(e => { (byFolder[e.folder] = byFolder[e.folder] || []).push(e); });
+
+    Object.entries(byFolder).sort(([a],[b]) => a.localeCompare(b)).forEach(([folder, items]) => {
+      const lbl = document.createElement('div');
+      lbl.className = 'folder-label';
+      lbl.textContent = `📁 ${folder}`;
+      list.appendChild(lbl);
+      items.forEach(exp => list.appendChild(makeItem(exp)));
+    });
+    if (noFolder.length) {
+      if (Object.keys(byFolder).length) {
+        const lbl = document.createElement('div');
+        lbl.className = 'folder-label';
+        lbl.textContent = 'フォルダなし';
+        list.appendChild(lbl);
+      }
+      noFolder.forEach(exp => list.appendChild(makeItem(exp)));
+    }
+  }
+}
+
+function archiveExp(id) {
+  const exp = state.experiments.find(e => e.id === id);
+  if (!exp) return;
+  exp.archived = !exp.archived;
+  if (exp.archived && state.selectedId === id) state.selectedId = null;
+  renderExpList();
+  renderDetail();
+  scheduleSave();
 }
 
 function selectExperiment(id) {
@@ -676,6 +778,7 @@ function openAddExpModal() {
   document.getElementById('exp-id').value = '';
   document.getElementById('exp-name').value = '';
   document.getElementById('exp-organism').value = '';
+  document.getElementById('exp-folder').value = state.activeFolder && state.activeFolder !== '__archived__' ? state.activeFolder : '';
   document.getElementById('exp-status').value = 'planned';
   document.getElementById('exp-color').value = '#48bb78';
   document.getElementById('exp-planned-start').value = '';
@@ -699,6 +802,7 @@ function openEditExpModal(id) {
   document.getElementById('exp-id').value = exp.id;
   document.getElementById('exp-name').value = exp.name || '';
   document.getElementById('exp-organism').value = exp.organism || '';
+  document.getElementById('exp-folder').value = exp.folder || '';
   document.getElementById('exp-status').value = exp.status || 'planned';
   document.getElementById('exp-color').value = exp.color || '#48bb78';
   document.getElementById('exp-planned-start').value = exp.plannedStartDate || '';
@@ -725,6 +829,7 @@ function saveExp() {
   const data = {
     name,
     organism:        document.getElementById('exp-organism').value.trim(),
+    folder:          document.getElementById('exp-folder').value.trim() || null,
     status:          document.getElementById('exp-status').value,
     color:           document.getElementById('exp-color').value,
     plannedStartDate:document.getElementById('exp-planned-start').value || null,
@@ -741,7 +846,7 @@ function saveExp() {
     const idx = state.experiments.findIndex(e => e.id === id);
     if (idx !== -1) state.experiments[idx] = { ...state.experiments[idx], ...data };
   } else {
-    state.experiments.push({ id: uuidv4(), parentId: null, progressNotes: [], createdAt: new Date().toISOString(), ...data });
+    state.experiments.push({ id: uuidv4(), parentId: null, archived: false, progressNotes: [], createdAt: new Date().toISOString(), ...data });
   }
   closeExpModal();
   renderAll();
@@ -1040,6 +1145,13 @@ function renderAll() {
 
 // Header
 document.getElementById('btn-add-exp').addEventListener('click', openAddExpModal);
+document.getElementById('btn-add-folder').addEventListener('click', () => {
+  const name = prompt('フォルダ名を入力してください');
+  if (!name?.trim()) return;
+  state.activeFolder = name.trim();
+  renderExpList();
+  openAddExpModal();
+});
 
 // Calendar nav
 document.getElementById('btn-prev-month').addEventListener('click', () => {
