@@ -58,10 +58,14 @@ header h1 { font-size: 18px; font-weight: 700; }
 .folder-bar { display: flex; gap: 4px; padding: 6px 10px; background: #f7fafc; border-bottom: 1px solid #e2e8f0; overflow-x: auto; flex-shrink: 0; }
 .folder-bar::-webkit-scrollbar { height: 3px; }
 .folder-bar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 2px; }
-.folder-tab { white-space: nowrap; padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; border: 1px solid #e2e8f0; background: #fff; color: #718096; cursor: pointer; }
+.folder-tab { white-space: nowrap; padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; border: 1px solid #e2e8f0; background: #fff; color: #718096; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
 .folder-tab:hover { background: #edf2f7; }
 .folder-tab.active { background: #2d3748; color: #fff; border-color: #2d3748; }
 .folder-tab.archive-tab.active { background: #a0aec0; border-color: #a0aec0; }
+.folder-tab-del { font-size: 10px; line-height: 1; opacity: 0.5; padding: 0 1px; }
+.folder-tab:hover .folder-tab-del { opacity: 1; }
+.folder-tab.active .folder-tab-del { opacity: 0.6; }
+.folder-tab.active .folder-tab-del:hover { opacity: 1; }
 
 /* Exp item archive button */
 .exp-item { position: relative; }
@@ -580,6 +584,19 @@ function getFolders() {
   return [...set].sort();
 }
 
+function deleteFolder(name) {
+  const count = state.experiments.filter(e => e.folder === name && !e.archived).length;
+  const msg = count > 0
+    ? `フォルダ「${name}」を削除しますか？\n中の実験 ${count} 件はフォルダなしに移動されます。`
+    : `フォルダ「${name}」を削除しますか？`;
+  if (!confirm(msg)) return;
+  state.folders = state.folders.filter(f => f !== name);
+  state.experiments.forEach(e => { if (e.folder === name) e.folder = null; });
+  if (state.activeFolder === name) state.activeFolder = null;
+  renderExpList();
+  scheduleSave();
+}
+
 function updateFolderDatalist() {
   const dl = document.getElementById('folder-datalist');
   if (!dl) return;
@@ -591,15 +608,24 @@ function renderFolderBar() {
   if (!bar) return;
   const folders = getFolders();
   const hasArchived = state.experiments.some(e => e.archived);
-  const tabs = [{ key: null, label: 'すべて' }, ...folders.map(f => ({ key: f, label: `📁 ${f}` }))];
+  const tabs = [{ key: null, label: 'すべて' }, ...folders.map(f => ({ key: f, label: `📁 ${f}`, deletable: true }))];
   if (hasArchived) tabs.push({ key: '__archived__', label: '📦 アーカイブ', cls: 'archive-tab' });
   bar.innerHTML = tabs.map(t =>
-    `<button class="folder-tab${t.cls ? ' '+t.cls : ''}${state.activeFolder === t.key ? ' active' : ''}" data-folder="${t.key ?? ''}">${escHtml(t.label)}</button>`
+    `<button class="folder-tab${t.cls ? ' '+t.cls : ''}${state.activeFolder === t.key ? ' active' : ''}" data-folder="${t.key ?? ''}">
+      ${escHtml(t.label)}${t.deletable ? `<span class="folder-tab-del" data-del-folder="${escHtml(t.key)}">✕</span>` : ''}
+    </button>`
   ).join('');
   bar.querySelectorAll('.folder-tab').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', e => {
+      if (e.target.closest('.folder-tab-del')) return;
       state.activeFolder = btn.dataset.folder === '' ? null : btn.dataset.folder;
       renderExpList();
+    });
+  });
+  bar.querySelectorAll('.folder-tab-del').forEach(del => {
+    del.addEventListener('click', e => {
+      e.stopPropagation();
+      deleteFolder(del.dataset.delFolder);
     });
   });
 }
