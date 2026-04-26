@@ -119,6 +119,15 @@ header h1 { font-size: 18px; font-weight: 700; }
 .diag-node-org { font-size: 10px; color: #718096; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 136px; }
 .diag-node-badge { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: 600; color: #fff; margin-top: 3px; }
 
+/* Settings */
+.btn-icon { background: none; border: none; color: #cbd5e0; font-size: 18px; padding: 4px 8px; line-height: 1; }
+.btn-icon:hover { color: #fff; }
+.sync-banner { background: #fffbeb; border-bottom: 1px solid #f6e05e; padding: 10px 16px; font-size: 13px; color: #744210; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sync-banner button { font-size: 12px; font-weight: 600; color: #d69e2e; background: none; border: 1px solid #d69e2e; border-radius: 4px; padding: 3px 10px; }
+.sync-status { font-size: 11px; color: #a0aec0; margin-left: 8px; }
+.sync-ok { color: #48bb78; }
+.sync-err { color: #fc8181; }
+
 /* Responsive */
 @media (max-width: 640px) {
   .layout { grid-template-columns: 1fr; }
@@ -129,8 +138,16 @@ header h1 { font-size: 18px; font-weight: 700; }
 <body>
 <header>
   <h1>🧫 培養実験管理</h1>
-  <button class="btn-primary" id="btn-add-exp">＋ 新規実験</button>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span class="sync-status" id="sync-status"></span>
+    <button class="btn-icon" id="btn-open-settings" title="JSONBin 設定">⚙</button>
+    <button class="btn-primary" id="btn-add-exp">＋ 新規実験</button>
+  </div>
 </header>
+<div class="sync-banner" id="sync-banner" hidden>
+  JSONBin が未設定のため、データはこの端末のみに保存されています。
+  <button id="btn-banner-settings">設定する</button>
+</div>
 
 <main class="layout">
   <!-- 左カラム -->
@@ -314,6 +331,32 @@ header h1 { font-size: 18px; font-weight: 700; }
     </div>
   </div>
 </div>
+
+<!-- モーダル4: JSONBin 設定 -->
+<div class="modal-overlay" id="modal-settings" hidden>
+  <div class="modal-box" style="max-width:440px;">
+    <div class="modal-title">🔑 JSONBin 設定</div>
+    <p style="font-size:13px;color:#718096;margin-bottom:16px;line-height:1.6;">
+      JSONBin のアカウントで Bin を作成し、下記を入力してください。<br>
+      API キーはこの端末の localStorage に保存されます。
+    </p>
+    <div class="form-row">
+      <label>Master API Key</label>
+      <input type="password" id="cfg-api-key" placeholder="$2b$10$..." autocomplete="off">
+    </div>
+    <div class="form-row">
+      <label>Bin ID</label>
+      <input type="text" id="cfg-bin-id" placeholder="64abc123..." autocomplete="off">
+    </div>
+    <div id="cfg-test-result" style="font-size:12px;min-height:18px;margin-bottom:8px;"></div>
+    <div class="modal-actions">
+      <button class="btn-danger btn-sm" id="btn-clear-cfg" style="margin-right:auto;">設定を削除</button>
+      <button class="btn-secondary" id="btn-cancel-settings">閉じる</button>
+      <button class="btn-secondary" id="btn-test-cfg">接続確認</button>
+      <button class="btn-primary" id="btn-save-settings">保存</button>
+    </div>
+  </div>
+</div>
 <script>
 const STATUS_LABEL = { planned:'計画中', ongoing:'実施中', subculturing:'継代中', completed:'完了', failed:'失敗' };
 const STATUS_COLOR = { planned:'#68d391', ongoing:'#48bb78', subculturing:'#4299e1', completed:'#a0aec0', failed:'#fc8181' };
@@ -339,6 +382,8 @@ function todayYMD() {
 }
 
 const LS_KEY = 'cultivation-data-v1';
+const CFG_KEY = 'cultivation-jsonbin-cfg';
+const JSONBIN_BASE = 'https://api.jsonbin.io/v3/b';
 
 function saveLocal() {
   try { localStorage.setItem(LS_KEY, JSON.stringify({ experiments: state.experiments })); } catch {}
@@ -351,33 +396,66 @@ function loadLocal() {
   } catch {}
 }
 
+function loadConfig() {
+  try { return JSON.parse(localStorage.getItem(CFG_KEY)) || null; } catch { return null; }
+}
+
+function saveConfig(cfg) {
+  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+}
+
+function clearConfig() {
+  localStorage.removeItem(CFG_KEY);
+}
+
+function setSyncStatus(msg, cls) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'sync-status ' + (cls || '');
+}
+
 async function loadFromAPI() {
+  const cfg = loadConfig();
+  if (!cfg?.apiKey || !cfg?.binId) { loadLocal(); return; }
   try {
-    const r = await fetch('/api/culture-load');
-    if (!r.ok) throw new Error('load failed');
-    const resp = await r.json();
-    if (Array.isArray(resp?.experiments)) {
-      state.experiments = resp.experiments;
+    const r = await fetch(`${JSONBIN_BASE}/${cfg.binId}/latest`, {
+      headers: { 'X-Master-Key': cfg.apiKey }
+    });
+    if (!r.ok) throw new Error(`JSONBin ${r.status}`);
+    const json = await r.json();
+    if (Array.isArray(json?.record?.experiments)) {
+      state.experiments = json.record.experiments;
       saveLocal();
+      setSyncStatus('同期済', 'sync-ok');
       return;
     }
-  } catch {}
+  } catch (e) {
+    setSyncStatus('同期失敗', 'sync-err');
+  }
   loadLocal();
 }
 
 async function saveToAPI() {
   saveLocal();
+  const cfg = loadConfig();
+  if (!cfg?.apiKey || !cfg?.binId) return;
   try {
-    await fetch('/api/culture-save', {
+    const r = await fetch(`${JSONBIN_BASE}/${cfg.binId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Master-Key': cfg.apiKey },
       body: JSON.stringify({ experiments: state.experiments })
     });
-  } catch {}
+    if (!r.ok) throw new Error(`JSONBin ${r.status}`);
+    setSyncStatus('同期済', 'sync-ok');
+  } catch {
+    setSyncStatus('同期失敗', 'sync-err');
+  }
 }
 
 function scheduleSave() {
   clearTimeout(state.syncTimer);
+  setSyncStatus('保存中…');
   state.syncTimer = setTimeout(saveToAPI, 1500);
 }
 function buildCalendarEvents() {
@@ -768,6 +846,47 @@ function saveSubculture() {
   scheduleSave();
 }
 
+function openSettingsModal() {
+  const cfg = loadConfig();
+  document.getElementById('cfg-api-key').value = cfg?.apiKey || '';
+  document.getElementById('cfg-bin-id').value = cfg?.binId || '';
+  document.getElementById('cfg-test-result').textContent = '';
+  document.getElementById('modal-settings').removeAttribute('hidden');
+  document.getElementById('cfg-api-key').focus();
+}
+
+function closeSettingsModal() {
+  document.getElementById('modal-settings').setAttribute('hidden', '');
+}
+
+function saveSettings() {
+  const apiKey = document.getElementById('cfg-api-key').value.trim();
+  const binId  = document.getElementById('cfg-bin-id').value.trim();
+  if (!apiKey || !binId) { alert('API Key と Bin ID を両方入力してください'); return; }
+  saveConfig({ apiKey, binId });
+  document.getElementById('sync-banner').setAttribute('hidden', '');
+  closeSettingsModal();
+  loadFromAPI().then(renderAll);
+}
+
+async function testConnection() {
+  const apiKey = document.getElementById('cfg-api-key').value.trim();
+  const binId  = document.getElementById('cfg-bin-id').value.trim();
+  const resultEl = document.getElementById('cfg-test-result');
+  if (!apiKey || !binId) { resultEl.textContent = '⚠ API Key と Bin ID を入力してください'; resultEl.style.color = '#d69e2e'; return; }
+  resultEl.textContent = '確認中…'; resultEl.style.color = '#718096';
+  try {
+    const r = await fetch(`${JSONBIN_BASE}/${binId}/latest`, { headers: { 'X-Master-Key': apiKey } });
+    if (r.ok) {
+      resultEl.textContent = '✓ 接続成功'; resultEl.style.color = '#48bb78';
+    } else {
+      resultEl.textContent = `✗ エラー: ${r.status} ${r.statusText}`; resultEl.style.color = '#fc8181';
+    }
+  } catch (e) {
+    resultEl.textContent = `✗ ${e.message}`; resultEl.style.color = '#fc8181';
+  }
+}
+
 function buildTree() {
   const map = {};
   state.experiments.forEach(e => { map[e.id] = { exp: e, children: [] }; });
@@ -962,13 +1081,36 @@ document.getElementById('modal-subculture').addEventListener('click', e => {
   if (e.target === document.getElementById('modal-subculture')) closeSubcultureModal();
 });
 
+// Settings modal
+document.getElementById('btn-open-settings').addEventListener('click', openSettingsModal);
+document.getElementById('btn-banner-settings').addEventListener('click', openSettingsModal);
+document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
+document.getElementById('btn-cancel-settings').addEventListener('click', closeSettingsModal);
+document.getElementById('btn-test-cfg').addEventListener('click', testConnection);
+document.getElementById('btn-clear-cfg').addEventListener('click', () => {
+  if (!confirm('JSONBin の設定を削除しますか？')) return;
+  clearConfig();
+  document.getElementById('cfg-api-key').value = '';
+  document.getElementById('cfg-bin-id').value = '';
+  document.getElementById('cfg-test-result').textContent = '設定を削除しました';
+  document.getElementById('cfg-test-result').style.color = '#718096';
+  document.getElementById('sync-banner').removeAttribute('hidden');
+  setSyncStatus('');
+});
+document.getElementById('modal-settings').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-settings')) closeSettingsModal();
+});
+
 // Escape key
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeExpModal(); closeNoteModal(); closeSubcultureModal(); }
+  if (e.key === 'Escape') { closeExpModal(); closeNoteModal(); closeSubcultureModal(); closeSettingsModal(); }
 });
 
 // Init
 async function init() {
+  if (!loadConfig()) {
+    document.getElementById('sync-banner').removeAttribute('hidden');
+  }
   await loadFromAPI();
   renderAll();
 }
