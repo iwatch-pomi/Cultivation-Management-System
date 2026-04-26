@@ -587,6 +587,11 @@ function renderFolderBar() {
   const bar = document.getElementById('folder-bar');
   if (!bar) return;
   const folders = getFolders();
+  // アクティブフォルダが実験ゼロの新フォルダでもタブに表示する
+  if (state.activeFolder && state.activeFolder !== '__archived__' && !folders.includes(state.activeFolder)) {
+    folders.push(state.activeFolder);
+    folders.sort();
+  }
   const hasArchived = state.experiments.some(e => e.archived);
   const tabs = [{ key: null, label: 'すべて' }, ...folders.map(f => ({ key: f, label: `📁 ${f}` }))];
   if (hasArchived) tabs.push({ key: '__archived__', label: '📦 アーカイブ', cls: 'archive-tab' });
@@ -687,12 +692,15 @@ function moveExpFolder(id) {
   if (isNaN(idx) || idx < 0 || idx >= options.length) { alert('番号を入力してください'); return; }
   if (idx === 0) {
     exp.folder = null;
+    state.activeFolder = null;
   } else if (idx === options.length - 1) {
     const newName = prompt('新しいフォルダ名を入力してください');
     if (!newName?.trim()) return;
     exp.folder = newName.trim();
+    state.activeFolder = exp.folder;
   } else {
     exp.folder = folders[idx - 1];
+    state.activeFolder = exp.folder;
   }
   renderExpList();
   scheduleSave();
