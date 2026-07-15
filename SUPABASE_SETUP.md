@@ -45,12 +45,14 @@
 - Email プロバイダはデフォルトで有効。特別な設定は不要です。
 - 本番で確実に届かせたい場合は Authentication → Emails でSMTPを設定推奨。
 
-## 5. アプリへの埋め込み
-`public/index.html` 冒頭の以下2定数を、手順1で取得した値に置き換えてください（担当者が対応します）。
+## 5. Vercel の環境変数に設定
+コードへの埋め込みは不要です。Vercel の **Project → Settings → Environment Variables** に以下を追加してください。
 
-```js
-const SUPABASE_URL = 'https://xxxx.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGci...';
-```
+| Key | Value |
+|---|---|
+| `SUPABASE_URL` | 手順1でコピーした Project URL |
+| `SUPABASE_ANON_KEY` | 手順1でコピーした anon public key |
 
-置き換え前（プレースホルダのまま）でも、アプリはローカル保存モードで正常に動作します。
+設定後、再デプロイ（または次回のデプロイ）で反映されます。
+アプリは起動時に `/api/config`（サーバーレス関数）経由でこの2つの値を取得します。
+未設定の場合はローカル保存モードのまま正常に動作します。

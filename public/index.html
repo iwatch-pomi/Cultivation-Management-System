@@ -416,11 +416,34 @@ header h1 { font-size: 18px; font-weight: 700; }
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// ==== Supabase 設定（SUPABASE_SETUP.md 参照。値を埋め込むまではローカル保存モードで動作）====
-const SUPABASE_URL = '__SUPABASE_URL__';
-const SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
-const REMOTE_ENABLED = !SUPABASE_URL.startsWith('__') && !!window.supabase;
-const sb = REMOTE_ENABLED ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+// ==== Supabase 設定 ====
+// URL / anon key は Vercel の環境変数 (SUPABASE_URL, SUPABASE_ANON_KEY) から
+// /api/config 経由で取得する（SUPABASE_SETUP.md 参照）。
+// 未設定・取得失敗時はローカル保存モードで動作する。
+let REMOTE_ENABLED = false;
+let sb = null;
+
+async function initSupabaseConfig() {
+  try {
+    const r = await fetch('/api/config');
+    if (!r.ok) return;
+    const cfg = await r.json();
+    if (cfg?.url && cfg?.anonKey && window.supabase) {
+      sb = window.supabase.createClient(cfg.url, cfg.anonKey);
+      REMOTE_ENABLED = true;
+      sb.auth.onAuthStateChange(async (_event, session) => {
+        state.session = session || null;
+        state.user = session?.user || null;
+        renderAccountUI();
+        closeAuthModal();
+        await loadData();
+        renderAll();
+      });
+    }
+  } catch {
+    // /api/config が無い環境（純粋な静的ホスティング等）ではローカル保存モードのまま
+  }
+}
 
 const STATUS_LABEL = { planned:'計画中', ongoing:'実施中', subculturing:'継代中', completed:'完了', failed:'失敗' };
 const STATUS_COLOR = { planned:'#68d391', ongoing:'#48bb78', subculturing:'#4299e1', completed:'#a0aec0', failed:'#fc8181' };
@@ -1350,18 +1373,9 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// 認証状態の変化を監視（OAuthリダイレクト復帰・ログアウト）
-sb?.auth.onAuthStateChange(async (_event, session) => {
-  state.session = session || null;
-  state.user = session?.user || null;
-  renderAccountUI();
-  closeAuthModal();
-  await loadData();
-  renderAll();
-});
-
 // Init
 async function init() {
+  await initSupabaseConfig();
   await refreshAuth();
   renderAccountUI();
   await loadData();
