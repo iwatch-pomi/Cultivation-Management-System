@@ -151,6 +151,22 @@ header h1 { font-size: 18px; font-weight: 700; }
 .sync-ok { color: #48bb78; }
 .sync-err { color: #fc8181; }
 
+/* Auth */
+.auth-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px; margin-bottom: 10px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; color: #2d3748; font-size: 14px; font-weight: 600; }
+.auth-btn:hover { background: #f7fafc; }
+.auth-ico { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; font-weight: 700; }
+#btn-login-google .auth-ico { color: #4285f4; }
+#btn-login-apple { background: #000; color: #fff; border-color: #000; }
+#btn-login-apple:hover { background: #1a1a1a; }
+.auth-divider { display: flex; align-items: center; text-align: center; color: #a0aec0; font-size: 12px; margin: 14px 0; }
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; border-bottom: 1px solid #e2e8f0; }
+.auth-divider span { padding: 0 10px; }
+.account-menu { position: absolute; top: 48px; right: 16px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); padding: 8px; min-width: 200px; z-index: 90; }
+.account-menu[hidden] { display: none; }
+.account-menu-email { font-size: 12px; color: #718096; padding: 6px 8px; border-bottom: 1px solid #edf2f7; margin-bottom: 6px; word-break: break-all; }
+.account-menu button { width: 100%; text-align: left; padding: 8px; border: none; background: none; border-radius: 6px; font-size: 13px; color: #2d3748; }
+.account-menu button:hover { background: #f7fafc; }
+
 /* Responsive */
 @media (max-width: 640px) {
   .layout { grid-template-columns: 1fr; }
@@ -163,13 +179,17 @@ header h1 { font-size: 18px; font-weight: 700; }
   <h1>🧫 培養実験管理</h1>
   <div style="display:flex;align-items:center;gap:8px;">
     <span class="sync-status" id="sync-status"></span>
-    <button class="btn-icon" id="btn-open-settings" title="JSONBin 設定">⚙</button>
+    <button class="btn-secondary btn-sm" id="btn-account" title="アカウント">ログイン</button>
     <button class="btn-primary" id="btn-add-exp">＋ 新規実験</button>
   </div>
 </header>
 <div class="sync-banner" id="sync-banner" hidden>
-  JSONBin が未設定のため、データはこの端末のみに保存されています。
-  <button id="btn-banner-settings">設定する</button>
+  ログインすると、複数の端末でデータを同期できます（未ログイン時はこの端末のみ保存）。
+  <button id="btn-banner-login">ログイン</button>
+</div>
+<div class="account-menu" id="account-menu" hidden>
+  <div class="account-menu-email" id="account-menu-email"></div>
+  <button id="btn-logout">ログアウト</button>
 </div>
 
 <main class="layout">
@@ -364,32 +384,44 @@ header h1 { font-size: 18px; font-weight: 700; }
   </div>
 </div>
 
-<!-- モーダル4: JSONBin 設定 -->
-<div class="modal-overlay" id="modal-settings" hidden>
-  <div class="modal-box" style="max-width:440px;">
-    <div class="modal-title">🔑 JSONBin 設定</div>
+<!-- モーダル4: ログイン -->
+<div class="modal-overlay" id="modal-auth" hidden>
+  <div class="modal-box" style="max-width:400px;">
+    <div class="modal-title">🔐 ログイン</div>
     <p style="font-size:13px;color:#718096;margin-bottom:16px;line-height:1.6;">
-      JSONBin のアカウントで Bin を作成し、下記を入力してください。<br>
-      API キーはこの端末の localStorage に保存されます。
+      ログインすると、複数の端末でデータを同期できます。
     </p>
-    <div class="form-row">
-      <label>Master API Key</label>
-      <input type="password" id="cfg-api-key" placeholder="$2b$10$..." autocomplete="off">
+    <div id="auth-remote-off" style="font-size:13px;color:#d69e2e;background:#fffbeb;border:1px solid #f6e05e;border-radius:6px;padding:10px;margin-bottom:16px;" hidden>
+      サーバー未設定のため、現在はこの端末のみに保存されます。
     </div>
-    <div class="form-row">
-      <label>Bin ID</label>
-      <input type="text" id="cfg-bin-id" placeholder="64abc123..." autocomplete="off">
+    <div id="auth-providers">
+      <button class="auth-btn" id="btn-login-google">
+        <span class="auth-ico">G</span> Google でログイン
+      </button>
+      <button class="auth-btn" id="btn-login-apple">
+        <span class="auth-ico"></span> Apple でログイン
+      </button>
+      <div class="auth-divider"><span>または</span></div>
+      <div class="form-row">
+        <label>メールアドレス</label>
+        <input type="email" id="auth-email" placeholder="you@example.com" autocomplete="email">
+      </div>
+      <button class="btn-primary" id="btn-login-email" style="width:100%;">ログインリンクを送信</button>
+      <div id="auth-message" style="font-size:12px;min-height:16px;margin-top:8px;"></div>
     </div>
-    <div id="cfg-test-result" style="font-size:12px;min-height:18px;margin-bottom:8px;"></div>
     <div class="modal-actions">
-      <button class="btn-danger btn-sm" id="btn-clear-cfg" style="margin-right:auto;">設定を削除</button>
-      <button class="btn-secondary" id="btn-cancel-settings">閉じる</button>
-      <button class="btn-secondary" id="btn-test-cfg">接続確認</button>
-      <button class="btn-primary" id="btn-save-settings">保存</button>
+      <button class="btn-secondary" id="btn-cancel-auth">閉じる</button>
     </div>
   </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+// ==== Supabase 設定（SUPABASE_SETUP.md 参照。値を埋め込むまではローカル保存モードで動作）====
+const SUPABASE_URL = '__SUPABASE_URL__';
+const SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
+const REMOTE_ENABLED = !SUPABASE_URL.startsWith('__') && !!window.supabase;
+const sb = REMOTE_ENABLED ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
 const STATUS_LABEL = { planned:'計画中', ongoing:'実施中', subculturing:'継代中', completed:'完了', failed:'失敗' };
 const STATUS_COLOR = { planned:'#68d391', ongoing:'#48bb78', subculturing:'#4299e1', completed:'#a0aec0', failed:'#fc8181' };
 const NOTE_LABEL = { observation:'観察', subculture:'継代', result:'結果', general:'一般' };
@@ -402,7 +434,9 @@ const state = {
   currentMonth: _now.getMonth(),
   selectedId: null,
   syncTimer: null,
-  activeFolder: null
+  activeFolder: null,
+  session: null,
+  user: null
 };
 
 function uuidv4() {
@@ -416,8 +450,6 @@ function todayYMD() {
 }
 
 const LS_KEY = 'cultivation-data-v1';
-const CFG_KEY = 'cultivation-jsonbin-cfg';
-const JSONBIN_BASE = 'https://api.jsonbin.io/v3/b';
 
 function saveLocal() {
   try { localStorage.setItem(LS_KEY, JSON.stringify({ experiments: state.experiments, folders: state.folders })); } catch {}
@@ -426,21 +458,9 @@ function saveLocal() {
 function loadLocal() {
   try {
     const d = JSON.parse(localStorage.getItem(LS_KEY));
-    if (Array.isArray(d?.experiments)) state.experiments = d.experiments;
-    if (Array.isArray(d?.folders)) state.folders = d.folders;
-  } catch {}
-}
-
-function loadConfig() {
-  try { return JSON.parse(localStorage.getItem(CFG_KEY)) || null; } catch { return null; }
-}
-
-function saveConfig(cfg) {
-  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
-}
-
-function clearConfig() {
-  localStorage.removeItem(CFG_KEY);
+    state.experiments = Array.isArray(d?.experiments) ? d.experiments : [];
+    state.folders = Array.isArray(d?.folders) ? d.folders : [];
+  } catch { state.experiments = []; state.folders = []; }
 }
 
 function setSyncStatus(msg, cls) {
@@ -450,49 +470,51 @@ function setSyncStatus(msg, cls) {
   el.className = 'sync-status ' + (cls || '');
 }
 
-async function loadFromAPI() {
-  const cfg = loadConfig();
-  if (!cfg?.apiKey || !cfg?.binId) { loadLocal(); return; }
-  try {
-    const r = await fetch(`${JSONBIN_BASE}/${cfg.binId}/latest`, {
-      headers: { 'X-Master-Key': cfg.apiKey }
-    });
-    if (!r.ok) throw new Error(`JSONBin ${r.status}`);
-    const json = await r.json();
-    if (Array.isArray(json?.record?.experiments)) {
-      state.experiments = json.record.experiments;
-      if (Array.isArray(json.record.folders)) state.folders = json.record.folders;
-      saveLocal();
+// ログイン中 → Supabase、ゲスト → localStorage
+async function loadData() {
+  if (state.user && sb) {
+    setSyncStatus('読み込み中…');
+    try {
+      const { data, error } = await sb.from('user_data')
+        .select('data').eq('user_id', state.user.id).maybeSingle();
+      if (error) throw error;
+      const rec = data?.data || {};
+      state.experiments = Array.isArray(rec.experiments) ? rec.experiments : [];
+      state.folders = Array.isArray(rec.folders) ? rec.folders : [];
       setSyncStatus('同期済', 'sync-ok');
-      return;
+    } catch (e) {
+      state.experiments = []; state.folders = [];
+      setSyncStatus('同期失敗', 'sync-err');
     }
-  } catch (e) {
-    setSyncStatus('同期失敗', 'sync-err');
+  } else {
+    loadLocal();
+    setSyncStatus('');
   }
-  loadLocal();
 }
 
-async function saveToAPI() {
-  saveLocal();
-  const cfg = loadConfig();
-  if (!cfg?.apiKey || !cfg?.binId) return;
-  try {
-    const r = await fetch(`${JSONBIN_BASE}/${cfg.binId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-Master-Key': cfg.apiKey },
-      body: JSON.stringify({ experiments: state.experiments, folders: state.folders })
-    });
-    if (!r.ok) throw new Error(`JSONBin ${r.status}`);
-    setSyncStatus('同期済', 'sync-ok');
-  } catch {
-    setSyncStatus('同期失敗', 'sync-err');
+async function saveData() {
+  if (state.user && sb) {
+    setSyncStatus('保存中…');
+    try {
+      const { error } = await sb.from('user_data').upsert({
+        user_id: state.user.id,
+        data: { experiments: state.experiments, folders: state.folders },
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+      if (error) throw error;
+      setSyncStatus('同期済', 'sync-ok');
+    } catch (e) {
+      setSyncStatus('同期失敗', 'sync-err');
+    }
+  } else {
+    saveLocal();
   }
 }
 
 function scheduleSave() {
   clearTimeout(state.syncTimer);
-  setSyncStatus('保存中…');
-  state.syncTimer = setTimeout(saveToAPI, 1500);
+  if (state.user && sb) setSyncStatus('保存中…');
+  state.syncTimer = setTimeout(saveData, 1500);
 }
 function buildCalendarEvents() {
   const map = {};
@@ -1015,45 +1037,80 @@ function saveSubculture() {
   scheduleSave();
 }
 
-function openSettingsModal() {
-  const cfg = loadConfig();
-  document.getElementById('cfg-api-key').value = cfg?.apiKey || '';
-  document.getElementById('cfg-bin-id').value = cfg?.binId || '';
-  document.getElementById('cfg-test-result').textContent = '';
-  document.getElementById('modal-settings').removeAttribute('hidden');
-  document.getElementById('cfg-api-key').focus();
+// ==== 認証 ====
+function openAuthModal() {
+  document.getElementById('auth-remote-off').hidden = REMOTE_ENABLED;
+  document.getElementById('auth-message').textContent = '';
+  document.getElementById('auth-email').value = '';
+  document.getElementById('modal-auth').removeAttribute('hidden');
 }
 
-function closeSettingsModal() {
-  document.getElementById('modal-settings').setAttribute('hidden', '');
+function closeAuthModal() {
+  document.getElementById('modal-auth').setAttribute('hidden', '');
 }
 
-function saveSettings() {
-  const apiKey = document.getElementById('cfg-api-key').value.trim();
-  const binId  = document.getElementById('cfg-bin-id').value.trim();
-  if (!apiKey || !binId) { alert('API Key と Bin ID を両方入力してください'); return; }
-  saveConfig({ apiKey, binId });
-  document.getElementById('sync-banner').setAttribute('hidden', '');
-  closeSettingsModal();
-  loadFromAPI().then(renderAll);
-}
-
-async function testConnection() {
-  const apiKey = document.getElementById('cfg-api-key').value.trim();
-  const binId  = document.getElementById('cfg-bin-id').value.trim();
-  const resultEl = document.getElementById('cfg-test-result');
-  if (!apiKey || !binId) { resultEl.textContent = '⚠ API Key と Bin ID を入力してください'; resultEl.style.color = '#d69e2e'; return; }
-  resultEl.textContent = '確認中…'; resultEl.style.color = '#718096';
-  try {
-    const r = await fetch(`${JSONBIN_BASE}/${binId}/latest`, { headers: { 'X-Master-Key': apiKey } });
-    if (r.ok) {
-      resultEl.textContent = '✓ 接続成功'; resultEl.style.color = '#48bb78';
-    } else {
-      resultEl.textContent = `✗ エラー: ${r.status} ${r.statusText}`; resultEl.style.color = '#fc8181';
-    }
-  } catch (e) {
-    resultEl.textContent = `✗ ${e.message}`; resultEl.style.color = '#fc8181';
+function requireRemote() {
+  if (!REMOTE_ENABLED) {
+    document.getElementById('auth-remote-off').hidden = false;
+    return false;
   }
+  return true;
+}
+
+async function loginWithProvider(provider) {
+  if (!requireRemote()) return;
+  const { error } = await sb.auth.signInWithOAuth({
+    provider,
+    options: { redirectTo: location.origin }
+  });
+  if (error) {
+    document.getElementById('auth-message').textContent = '✗ ' + error.message;
+    document.getElementById('auth-message').style.color = '#fc8181';
+  }
+}
+
+async function loginWithEmail() {
+  if (!requireRemote()) return;
+  const email = document.getElementById('auth-email').value.trim();
+  const msg = document.getElementById('auth-message');
+  if (!email) { msg.textContent = '⚠ メールアドレスを入力してください'; msg.style.color = '#d69e2e'; return; }
+  msg.textContent = '送信中…'; msg.style.color = '#718096';
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: location.origin }
+  });
+  if (error) {
+    msg.textContent = '✗ ' + error.message; msg.style.color = '#fc8181';
+  } else {
+    msg.textContent = '✓ ログインリンクをメールで送信しました。メールを確認してください。';
+    msg.style.color = '#48bb78';
+  }
+}
+
+async function signOut() {
+  if (sb) await sb.auth.signOut();
+  document.getElementById('account-menu').setAttribute('hidden', '');
+}
+
+function renderAccountUI() {
+  const btn = document.getElementById('btn-account');
+  if (state.user) {
+    const email = state.user.email || 'ログイン中';
+    btn.textContent = email.length > 16 ? email.slice(0, 14) + '…' : email;
+    document.getElementById('account-menu-email').textContent = email;
+    document.getElementById('sync-banner').setAttribute('hidden', '');
+  } else {
+    btn.textContent = 'ログイン';
+    document.getElementById('account-menu').setAttribute('hidden', '');
+    if (REMOTE_ENABLED) document.getElementById('sync-banner').removeAttribute('hidden');
+  }
+}
+
+async function refreshAuth() {
+  if (!sb) { state.session = null; state.user = null; return; }
+  const { data } = await sb.auth.getSession();
+  state.session = data.session || null;
+  state.user = data.session?.user || null;
 }
 
 function buildTree() {
@@ -1259,37 +1316,55 @@ document.getElementById('modal-subculture').addEventListener('click', e => {
   if (e.target === document.getElementById('modal-subculture')) closeSubcultureModal();
 });
 
-// Settings modal
-document.getElementById('btn-open-settings').addEventListener('click', openSettingsModal);
-document.getElementById('btn-banner-settings').addEventListener('click', openSettingsModal);
-document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
-document.getElementById('btn-cancel-settings').addEventListener('click', closeSettingsModal);
-document.getElementById('btn-test-cfg').addEventListener('click', testConnection);
-document.getElementById('btn-clear-cfg').addEventListener('click', () => {
-  if (!confirm('JSONBin の設定を削除しますか？')) return;
-  clearConfig();
-  document.getElementById('cfg-api-key').value = '';
-  document.getElementById('cfg-bin-id').value = '';
-  document.getElementById('cfg-test-result').textContent = '設定を削除しました';
-  document.getElementById('cfg-test-result').style.color = '#718096';
-  document.getElementById('sync-banner').removeAttribute('hidden');
-  setSyncStatus('');
+// Account / auth
+document.getElementById('btn-account').addEventListener('click', () => {
+  if (state.user) {
+    const menu = document.getElementById('account-menu');
+    menu.hidden = !menu.hidden;
+  } else {
+    openAuthModal();
+  }
 });
-document.getElementById('modal-settings').addEventListener('click', e => {
-  if (e.target === document.getElementById('modal-settings')) closeSettingsModal();
+document.getElementById('btn-banner-login').addEventListener('click', openAuthModal);
+document.getElementById('btn-cancel-auth').addEventListener('click', closeAuthModal);
+document.getElementById('btn-login-google').addEventListener('click', () => loginWithProvider('google'));
+document.getElementById('btn-login-apple').addEventListener('click', () => loginWithProvider('apple'));
+document.getElementById('btn-login-email').addEventListener('click', loginWithEmail);
+document.getElementById('btn-logout').addEventListener('click', signOut);
+document.getElementById('modal-auth').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-auth')) closeAuthModal();
+});
+// クリックでアカウントメニューを閉じる
+document.addEventListener('click', e => {
+  const menu = document.getElementById('account-menu');
+  if (!menu.hidden && !menu.contains(e.target) && e.target.id !== 'btn-account') {
+    menu.hidden = true;
+  }
 });
 
 // Escape key
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeExpModal(); closeNoteModal(); closeSubcultureModal(); closeSettingsModal(); }
+  if (e.key === 'Escape') {
+    closeExpModal(); closeNoteModal(); closeSubcultureModal(); closeAuthModal();
+    document.getElementById('account-menu').hidden = true;
+  }
+});
+
+// 認証状態の変化を監視（OAuthリダイレクト復帰・ログアウト）
+sb?.auth.onAuthStateChange(async (_event, session) => {
+  state.session = session || null;
+  state.user = session?.user || null;
+  renderAccountUI();
+  closeAuthModal();
+  await loadData();
+  renderAll();
 });
 
 // Init
 async function init() {
-  if (!loadConfig()) {
-    document.getElementById('sync-banner').removeAttribute('hidden');
-  }
-  await loadFromAPI();
+  await refreshAuth();
+  renderAccountUI();
+  await loadData();
   renderAll();
 }
 init();

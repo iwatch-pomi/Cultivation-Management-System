@@ -1,0 +1,27 @@
+-- 培養実験管理: ユーザー別データ保存テーブル
+-- Supabase SQL Editor でこのファイルの内容を実行してください。
+
+create table if not exists public.user_data (
+  user_id    uuid primary key references auth.users(id) on delete cascade,
+  data       jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.user_data enable row level security;
+
+-- 各ユーザーは自分の行のみ read/write 可能（Row Level Security）
+drop policy if exists "own_select" on public.user_data;
+create policy "own_select" on public.user_data
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "own_insert" on public.user_data;
+create policy "own_insert" on public.user_data
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists "own_update" on public.user_data;
+create policy "own_update" on public.user_data
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "own_delete" on public.user_data;
+create policy "own_delete" on public.user_data
+  for delete using (auth.uid() = user_id);
